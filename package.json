@@ -1,5 +1,5 @@
 {
-  "name": "react-native-iap",
+  "name": "@spicysparks/react-native-iap",
   "version": "12.11.0",
   "description": "React Native In App Purchase Module.",
   "repository": "https://github.com/dooboolab-community/react-native-iap",
