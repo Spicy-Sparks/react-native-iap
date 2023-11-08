@@ -1,4 +1,4 @@
-import type {ProductAndroid} from '.';
+import type {ProductAndroid} from './index';
 
 export enum AndroidPurchaseState {
   purchased = 0,
