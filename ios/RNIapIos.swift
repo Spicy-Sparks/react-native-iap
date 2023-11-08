@@ -76,16 +76,14 @@ class RNIapIos: RCTEventEmitter, SKRequestDelegate, SKPaymentTransactionObserver
     }
 
     func addPromise(forKey key: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-        myQueue.sync(execute: { [self] in
-            var promises: [RNIapIosPromise]? = promisesByKey[key]
+        var promises: [RNIapIosPromise]? = promisesByKey[key]
 
-            if promises == nil {
-                promises = []
-            }
+        if promises == nil {
+            promises = []
+        }
 
-            promises?.append((resolve, reject))
-            promisesByKey[key] = promises
-        })
+        promises?.append((resolve, reject))
+        promisesByKey[key] = promises
     }
 
     func resolvePromises(forKey key: String?, value: Any?) {
@@ -167,7 +165,9 @@ class RNIapIos: RCTEventEmitter, SKRequestDelegate, SKPaymentTransactionObserver
         if let productsRequest = productsRequest {
             productsRequest.delegate = self
             let key: String = productsRequest.key
-            addPromise(forKey: key, resolve: resolve, reject: reject)
+            myQueue.sync(execute: { [self] in
+                addPromise(forKey: key, resolve: resolve, reject: reject)
+            })
             productsRequest.start()
         }
     }
@@ -177,7 +177,9 @@ class RNIapIos: RCTEventEmitter, SKRequestDelegate, SKPaymentTransactionObserver
         reject: @escaping RCTPromiseRejectBlock = { _, _, _ in }
     ) {
         pendingTransactionWithAutoFinish = automaticallyFinishRestoredTransactions
-        addPromise(forKey: "availableItems", resolve: resolve, reject: reject)
+        myQueue.sync(execute: { [self] in
+            addPromise(forKey: "availableItems", resolve: resolve, reject: reject)
+        })
         SKPaymentQueue.default().restoreCompletedTransactions()
     }
 
@@ -192,7 +194,9 @@ class RNIapIos: RCTEventEmitter, SKRequestDelegate, SKPaymentTransactionObserver
     ) {
         pendingTransactionWithAutoFinish = andDangerouslyFinishTransactionAutomatically
         if let product = validProducts[sku] {
-            addPromise(forKey: product.productIdentifier, resolve: resolve, reject: reject)
+            myQueue.sync(execute: { [self] in
+                addPromise(forKey: product.productIdentifier, resolve: resolve, reject: reject)
+            })
 
             let payment = SKMutablePayment(product: product)
 
@@ -242,7 +246,9 @@ class RNIapIos: RCTEventEmitter, SKRequestDelegate, SKPaymentTransactionObserver
         debugMessage("clear remaining Transactions (\(countPendingTransaction)). Call this before make a new transaction")
 
         if countPendingTransaction > 0 {
-            addPromise(forKey: "cleaningTransactions", resolve: resolve, reject: reject)
+            myQueue.sync(execute: { [self] in
+                addPromise(forKey: "cleaningTransactions", resolve: resolve, reject: reject)
+            })
             for transaction in pendingTrans {
                 SKPaymentQueue.default().finishTransaction(transaction)
             }
