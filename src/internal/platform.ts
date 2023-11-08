@@ -75,7 +75,7 @@ export const isStorekit2Avaiable = (): boolean =>
 export const isIosStorekit2 = () =>
   isIos &&
   !!iosNativeModule &&
-  // iosNativeModule === RNIapIosSk2 &&
+  iosNativeModule === RNIapIosSk2 &&
   isStorekit2Avaiable();
 
 export const setIosNativeModule = (
