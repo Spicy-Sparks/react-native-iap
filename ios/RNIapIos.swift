@@ -78,42 +78,38 @@ class RNIapIos: RCTEventEmitter, SKRequestDelegate, SKPaymentTransactionObserver
     func addPromise(forKey key: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         myQueue.sync(execute: { [self] in
             var promises: [RNIapIosPromise]? = promisesByKey[key]
-            
+
             if promises == nil {
                 promises = []
             }
-            
+
             promises?.append((resolve, reject))
             promisesByKey[key] = promises
         })
     }
 
     func resolvePromises(forKey key: String?, value: Any?) {
-        myQueue.sync(execute: { [self] in
-            let promises: [RNIapIosPromise]? = promisesByKey[key ?? ""]
+        let promises: [RNIapIosPromise]? = promisesByKey[key ?? ""]
 
-            if let promises = promises {
-                for tuple in promises {
-                    let resolveBlck = tuple.0
-                    resolveBlck(value)
-                }
-                promisesByKey[key ?? ""] = nil
+        if let promises = promises {
+            for tuple in promises {
+                let resolveBlck = tuple.0
+                resolveBlck(value)
             }
-        })
+            promisesByKey[key ?? ""] = nil
+        }
     }
 
     func rejectPromises(forKey key: String, code: String?, message: String?, error: Error?) {
-        myQueue.sync(execute: { [self] in
-            let promises = promisesByKey[key]
-            
-            if let promises = promises {
-                for tuple in promises {
-                    let reject = tuple.1
-                    reject(code, message, error)
-                }
-                promisesByKey[key] = nil
+        let promises = promisesByKey[key]
+
+        if let promises = promises {
+            for tuple in promises {
+                let reject = tuple.1
+                reject(code, message, error)
             }
-        })
+            promisesByKey[key] = nil
+        }
     }
 
     func rejectAllPendingPromises() {
@@ -362,8 +358,10 @@ class RNIapIos: RCTEventEmitter, SKRequestDelegate, SKPaymentTransactionObserver
         for product in validProducts.values {
             items.append(getProductObject(product))
         }
-        
-        resolvePromises(forKey: request.key, value: items)
+
+        myQueue.sync(execute: { [self] in
+            resolvePromises(forKey: request.key, value: items)
+        })
     }
 
     // Add to valid products from Apple server response. Allowing getProducts, getSubscriptions call several times.
@@ -384,11 +382,13 @@ class RNIapIos: RCTEventEmitter, SKRequestDelegate, SKPaymentTransactionObserver
                 return
             } else {
                 if let key: String = productsRequest?.key {
-                    rejectPromises(
-                        forKey: key,
-                        code: standardErrorCode(nsError.code),
-                        message: error.localizedDescription,
-                        error: error)
+                    myQueue.sync(execute: { [self] in
+                                    rejectPromises(
+                                        forKey: key,
+                                        code: standardErrorCode(nsError.code),
+                                        message: error.localizedDescription,
+                                        error: error)}
+                    )
                 }
             }
         }
@@ -501,16 +501,20 @@ class RNIapIos: RCTEventEmitter, SKRequestDelegate, SKPaymentTransactionObserver
             }
         }
         pendingTransactionWithAutoFinish = false
-        
-        resolvePromises(forKey: "availableItems", value: items)
+
+        myQueue.sync(execute: { [self] in
+            resolvePromises(forKey: "availableItems", value: items)
+        })
     }
 
     func paymentQueue(_ queue: SKPaymentQueue, restoreCompletedTransactionsFailedWithError error: Error) {
-        rejectPromises(
-            forKey: "availableItems",
-            code: standardErrorCode((error as NSError).code),
-            message: error.localizedDescription,
-            error: error)
+        myQueue.sync(execute: { [self] in
+            rejectPromises(
+                forKey: "availableItems",
+                code: standardErrorCode((error as NSError).code),
+                message: error.localizedDescription,
+                error: error)
+        })
 
         debugMessage("restoreCompletedTransactionsFailedWithError")
     }
@@ -522,14 +526,14 @@ class RNIapIos: RCTEventEmitter, SKRequestDelegate, SKPaymentTransactionObserver
         }
 
         getPurchaseData(transaction) { [self] purchase in
-            myQueue.sync {
+            myQueue.sync(execute: { [self] in
                 resolvePromises(forKey: transaction.payment.productIdentifier, value: purchase)
 
                 // additionally send event
                 if hasListeners {
                     sendEvent(withName: "purchase-updated", body: purchase)
                 }
-            }
+            })
         }
     }
 
@@ -871,7 +875,9 @@ class RNIapIos: RCTEventEmitter, SKRequestDelegate, SKPaymentTransactionObserver
             countPendingTransaction -= transactions.count
 
             if countPendingTransaction <= 0 {
-                resolvePromises(forKey: "cleaningTransactions", value: nil)
+                myQueue.sync(execute: { [self] in
+                    resolvePromises(forKey: "cleaningTransactions", value: nil)
+                })
                 countPendingTransaction = 0
             }
         }
