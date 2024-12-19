@@ -1,5 +1,5 @@
 {
-  "name": "react-native-iap",
+  "name": "@spicysparks/react-native-iap",
   "version": "12.16.0",
   "description": "React Native In App Purchase Module.",
   "repository": "https://github.com/hyochan/react-native-iap",
