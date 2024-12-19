@@ -2,7 +2,13 @@ import {EmitterSubscription, NativeEventEmitter} from 'react-native';
 
 import {TransactionEvent, transactionSk2ToPurchaseMap} from './types/appleSk2';
 import {isIosStorekit2} from './iap';
-import { getAndroidModule, getIosModule, getNativeModule, isAndroid, isIos } from './internal';
+import {
+  getAndroidModule,
+  getIosModule,
+  getNativeModule,
+  isAndroid,
+  isIos,
+} from './internal';
 import type {PurchaseError} from './purchaseError';
 import type {Purchase} from './types';
 
@@ -40,6 +46,7 @@ const App = () => {
  */
 export const purchaseUpdatedListener = (
   listener: (event: Purchase) => void,
+  errorCallback?: (error: unknown) => void,
 ) => {
   const eventEmitter = new NativeEventEmitter(getNativeModule());
   const proxyListener = isIosStorekit2()
@@ -53,7 +60,13 @@ export const purchaseUpdatedListener = (
   );
 
   if (isAndroid) {
-    getAndroidModule().startListening();
+    getAndroidModule().startListening().catch((error: unknown) => {
+      if (errorCallback) {
+        errorCallback(error);
+      } else {
+        throw error;
+      }
+    });
   }
 
   return emitterSubscription;

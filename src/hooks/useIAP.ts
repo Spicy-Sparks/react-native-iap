@@ -1,4 +1,4 @@
-import {useCallback} from 'react';
+import {useCallback, useEffect} from 'react';
 
 import {
   finishTransaction as iapFinishTransaction,
@@ -52,6 +52,7 @@ export const useIAP = (): IAP_STATUS => {
     currentPurchase,
     currentPurchaseError,
     initConnectionError,
+    setConnected,
     setProducts,
     setSubscriptions,
     setAvailablePurchases,
@@ -117,6 +118,16 @@ export const useIAP = (): IAP_STATUS => {
       setCurrentPurchaseError,
     ],
   );
+
+  useEffect(() => {
+    setConnected(true);
+
+    return () => {
+      setConnected(false);
+      setCurrentPurchaseError(undefined);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return {
     connected,

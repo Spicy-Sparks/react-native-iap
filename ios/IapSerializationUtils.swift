@@ -19,7 +19,8 @@ func serialize(_ p: Product) -> [String: Any?] {
         "jsonRepresentation": serializeDebug(p.jsonRepresentation),
         "price": p.price,
         "subscription": serialize(p.subscription),
-        "type": serialize(p.type)
+        "type": serialize(p.type),
+        "currency": p.priceFormatStyle.currencyCode
     ]
 }
 
@@ -29,6 +30,10 @@ func serializeDebug (_ d: Data) -> String? {
     #else
     return nil
     #endif
+}
+
+func serialize (_ d: Data) -> String? {
+    return String( decoding: d, as: UTF8.self)
 }
 
 func serializeDebug (_ s: String) -> String? {
@@ -67,6 +72,7 @@ func serialize(_ sp: Product.SubscriptionPeriod.Unit?) -> String? {
     case .week: return "week"
     case .month: return "month"
     case .year: return "year"
+
     default:
         return nil
     }
@@ -75,10 +81,27 @@ func serialize(_ sp: Product.SubscriptionPeriod.Unit?) -> String? {
 @available(iOS 15.0, tvOS 15.0, *)
 func serialize(_ s: Product.SubscriptionInfo.Status?) -> [String: Any?]? {
     guard let s = s else {return nil}
-    return ["state": serialize( s.state)
-            // "renewalInfo": serialize(s.renewalInfo),
+    return ["state": serialize( s.state),
+            "renewalInfo": serialize(s.renewalInfo)
             // "transaction": serialize(s.transaction),
     ]
+}
+
+@available(iOS 15.0, tvOS 15.0, *)
+func serialize(_ vri: VerificationResult<Product.SubscriptionInfo.RenewalInfo>?) -> [String: Any?]? {
+    guard let vri = vri else {return nil}
+    do {
+        let ri = try vri.payloadValue
+        let jsonStringRepresentation = String(data: ri.jsonRepresentation, encoding: .utf8) ?? ""
+        return [
+            "jsonRepresentation": jsonStringRepresentation,
+            "willAutoRenew": ri.willAutoRenew,
+            "autoRenewPreference": ri.autoRenewPreference
+        ]
+    } catch {
+        print("Error in parsing VerificationResult<Product.SubscriptionInfo.RenewalInfo>")
+        return nil
+    }
 }
 
 @available(iOS 15.0, tvOS 15.0, *)
@@ -90,6 +113,7 @@ func serialize(_ rs: Product.SubscriptionInfo.RenewalState?) -> String? {
     case .inGracePeriod: return "inGracePeriod"
     case .revoked: return "revoked"
     case .subscribed: return "subscribed"
+
     default:
         return nil
     }
@@ -122,6 +146,7 @@ func serialize(_ pm: Product.SubscriptionOffer.PaymentMode?) -> String? {
     case .freeTrial: return "freeTrial"
     case .payAsYouGo: return "payAsYouGo"
     case .payUpFront: return "payUpFront"
+
     default:
         return nil
     }
@@ -132,6 +157,7 @@ func serialize(_ ot: Product.SubscriptionOffer.OfferType?) -> String? {
     switch ot {
     case .introductory: return "introductory"
     case .promotional: return "promotional"
+
     default:
         return nil
     }
@@ -143,10 +169,12 @@ func serialize(_ t: Transaction) -> [String: Any?] {
     if #available(iOS 16.0, tvOS 16.0, *) {
         environment = t.environment.rawValue
     } else {
+        #if !os(visionOS)
         let env = t.environmentStringRepresentation
         if ["Production", "Sandbox", "Xcode"].contains(env) {
             environment = env
         }
+        #endif
     }
 
     return ["appAccountToken": t.appAccountToken?.uuidString,
@@ -158,7 +186,7 @@ func serialize(_ t: Transaction) -> [String: Any?] {
             "environment": environment,
             "id": t.id,
             "isUpgraded": t.isUpgraded,
-            "jsonRepresentation": serializeDebug(t.jsonRepresentation),
+            "jsonRepresentation": serialize(t.jsonRepresentation),
             "offerID": t.offerID,
             "offerType": serialize(t.offerType),
             "originalID": t.originalID,
@@ -188,6 +216,7 @@ func serialize(_ ot: Transaction.OfferType?) -> String? {
     case .promotional: return "promotional"
     case .introductory: return "introductory"
     case .code: return "code"
+
     default:
         return nil
     }
@@ -198,6 +227,7 @@ func serialize(_ ot: Transaction.OwnershipType?) -> String? {
     switch ot {
     case .purchased: return "purchased"
     case .familyShared: return "familyShared"
+
     default:
         return nil
     }
@@ -210,6 +240,7 @@ func serialize(_ pt: Product.ProductType?) -> String? {
     case .consumable: return "consumable"
     case .nonConsumable: return "nonConsumable"
     case .nonRenewable: return "nonRenewable"
+
     default:
         return nil
     }

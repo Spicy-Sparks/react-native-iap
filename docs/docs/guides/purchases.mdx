@@ -12,14 +12,14 @@ import AdFitTopFixed from "@site/src/uis/AdFitTopFixed";
 
 > :warning: **Purchase Flow Redesign** :warning:
 >
-> The `purchase` flow has been updated as a result of the findings in issue [#307](https://github.com/dooboolab-community/react-native-iap/issues/307).
+> The `purchase` flow has been updated as a result of the findings in issue [#307](https://github.com/hyochan/react-native-iap/issues/307).
 > The resulting flow has been redesign to not rely on `Promise` or `Callback`.
 >
 > Below are some of the specific reasons for the redesign:
 >
 > 1. There may be more than one response when requesting a payment.
 > 2. Purchases are inter-session `asynchronuous` meaning requests that are made may take several hours to complete and continue to exist even after the app has been closed or crashed.
-> 3. The purchase may be pending and hard to track what has been done ([example](https://github.com/dooboolab-community/react-native-iap/issues/307).
+> 3. The purchase may be pending and hard to track what has been done ([example](https://github.com/hyochan/react-native-iap/issues/307).
 > 4. The Billing Flow is an `event` pattern rather than a `callback` pattern.
 
 Once you have called `getProducts()`, and have a valid response, you can call `requestPurchase()`. Subscribable products can be purchased just like consumable products and users can cancel subscriptions by using the iOS System Settings.
@@ -106,15 +106,20 @@ class App extends Component {
 Then define the method like below and call it when user press the button.
 
 ```tsx
-import { requestPurchase, requestSubscription } from 'react-native-iap';
+import { Platform } from 'react-native';
+import { requestPurchase, requestSubscription, RequestPurchase } from 'react-native-iap';
 ...
 class App extends Component {
   purchase = async (sku: string) => {
     try {
-      await requestPurchase({
+      let purchaseParams: RequestPurchase = {
         sku,
         andDangerouslyFinishTransactionAutomaticallyIOS: false,
-      });
+      };
+      if (Platform.OS === 'android') {
+        purchaseParams = { skus: [sku] };
+      }
+      await requestPurchase(purchaseParams);
     } catch (err) {
       console.warn(err.code, err.message);
     }
@@ -188,3 +193,4 @@ All purchases should be consumed by calling `finishTransaction()`.
 - For non-consumable purchases need to be acknowledged on Android, or they will be automatically refunded after a few days. This method acknowledges a purchase when you have delivered it to your user.
 - On iOS non-consumable purchases are finished automatically but this will change in the future so it is recommended that you prepare by simply calling this method on non-consumables as well.
 - It works for both platforms. Equal to finishTransaction for iOS + consumePurchase and acknowledgePurchase for Android.
+- On Android, although you can confirm transactions through the client, [Google encourages you to confirm receipts as quickly and securely as possible through the backend.](https://developer.android.com/google/play/billing/integrate#subscriptions)

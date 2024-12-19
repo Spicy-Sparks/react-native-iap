@@ -6,11 +6,18 @@ import java.util.HashMap
 
 object PromiseUtils {
     private val promises = HashMap<String, MutableList<Promise>>()
-    fun addPromiseForKey(key: String, promise: Promise) {
+
+    fun addPromiseForKey(
+        key: String,
+        promise: Promise,
+    ) {
         promises.getOrPut(key) { mutableListOf() }.add(promise)
     }
 
-    fun resolvePromisesForKey(key: String, value: Any?) {
+    fun resolvePromisesForKey(
+        key: String,
+        value: Any?,
+    ) {
         promises[key]?.forEach { promise ->
             promise.safeResolve(value)
         }
@@ -26,7 +33,7 @@ object PromiseUtils {
 
     fun rejectPromisesForKey(
         key: String,
-        code: String?,
+        code: String,
         message: String?,
         err: Exception?,
     ) {

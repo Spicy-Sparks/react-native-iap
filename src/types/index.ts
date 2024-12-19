@@ -9,13 +9,13 @@ import type * as Apple from './apple';
 
 export type Sku = string;
 
-export enum ProrationModesAndroid {
-  IMMEDIATE_WITH_TIME_PRORATION = 1,
-  IMMEDIATE_AND_CHARGE_PRORATED_PRICE = 2,
-  IMMEDIATE_WITHOUT_PRORATION = 3,
-  DEFERRED = 4,
-  IMMEDIATE_AND_CHARGE_FULL_PRICE = 5,
-  UNKNOWN_SUBSCRIPTION_UPGRADE_DOWNGRADE_POLICY = 0,
+export enum ReplacementModesAndroid {
+  UNKNOWN_REPLACEMENT_MODE = 0,
+  WITH_TIME_PRORATION = 1,
+  CHARGE_PRORATED_PRICE = 2,
+  WITHOUT_PRORATION = 3,
+  CHARGE_FULL_PRICE = 5,
+  DEFERRED = 6,
 }
 
 export enum PurchaseStateAndroid {
@@ -44,6 +44,11 @@ export enum ProductType {
 
   /** Consumable */
   iap = 'iap',
+}
+
+export enum TransactionReason {
+  PURCHASE = 'PURCHASE',
+  RENEWAL = 'RENEWAL',
 }
 
 export interface ProductCommon {
@@ -102,6 +107,7 @@ export interface SubscriptionPurchase extends ProductPurchase {
   originalTransactionDateIOS?: number;
   originalTransactionIdentifierIOS?: string;
   verificationResultIOS?: string;
+  transactionReasonIOS?: TransactionReason | string;
 }
 
 export type Purchase = ProductPurchase | SubscriptionPurchase;
@@ -118,6 +124,7 @@ export interface Discount {
 
 export interface ProductAndroid extends ProductCommon {
   type: 'inapp' | 'iap';
+  name?: string;
   oneTimePurchaseOfferDetails?: {
     priceCurrencyCode: string;
     formattedPrice: string;
@@ -248,7 +255,7 @@ export interface SubscriptionOffer {
 
 export interface RequestSubscriptionAndroid extends RequestPurchaseBaseAndroid {
   purchaseTokenAndroid?: string;
-  prorationModeAndroid?: ProrationModesAndroid;
+  replacementModeAndroid?: ReplacementModesAndroid;
   subscriptionOffers: SubscriptionOffer[];
 }
 

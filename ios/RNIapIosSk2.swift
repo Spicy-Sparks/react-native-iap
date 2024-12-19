@@ -102,6 +102,11 @@ protocol Sk2Delegate {
         reject: @escaping RCTPromiseRejectBlock
     )
 
+    func getStorefront(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        reject: @escaping RCTPromiseRejectBlock
+    )
+
     func startObserving()
     func stopObserving()
 }
@@ -240,6 +245,13 @@ class DummySk2: Sk2Delegate {
         reject(errorCode, errorMessage, nil)
     }
 
+    func getStorefront(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        reject: @escaping RCTPromiseRejectBlock
+    ) {
+        reject(errorCode, errorMessage, nil)
+    }
+
     func startObserving() {
     }
 
@@ -275,10 +287,6 @@ class RNIapIosSk2: RCTEventEmitter, Sk2Delegate {
 
     override func stopObserving() {
         delegate.stopObserving()
-    }
-
-    override func addListener(_ eventName: String?) {
-        super.addListener(eventName)
     }
 
     /**
@@ -419,6 +427,13 @@ class RNIapIosSk2: RCTEventEmitter, Sk2Delegate {
         reject: @escaping RCTPromiseRejectBlock = { _, _, _ in }
     ) {
         delegate.beginRefundRequest(sku, resolve: resolve, reject: reject)
+    }
+
+    @objc public func getStorefront(
+        _ resolve: @escaping RCTPromiseResolveBlock = { _ in },
+        reject: @escaping RCTPromiseRejectBlock = { _, _, _ in }
+    ) {
+        delegate.getStorefront(resolve, reject: reject)
     }
 }
 
@@ -596,12 +611,12 @@ class RNIapIosSk2iOS15: Sk2Delegate {
         reject: @escaping RCTPromiseRejectBlock = { _, _, _ in }
     ) {
         Task {
-            var purchasedItems: [Transaction] = []
+            var purchasedItemsSerialized: [[String: Any?]] = []
 
-            func addTransaction(transaction: Transaction) {
-                purchasedItems.append( transaction)
+            func addTransaction(transaction: Transaction, verification: VerificationResult<Transaction>) {
+                purchasedItemsSerialized.append(serialize(transaction, verification))
                 if alsoPublishToEventListener {
-                    self.sendEvent?("purchase-update", serialize(transaction))
+                    self.sendEvent?("purchase-updated", serialize(transaction))
                 }
             }
             func addError( error: Error, errorDict: [String: String]) {
@@ -610,19 +625,19 @@ class RNIapIosSk2iOS15: Sk2Delegate {
                 }
             }
             // Iterate through all of the user's purchased products.
-            for await result in onlyIncludeActiveItems ? Transaction.currentEntitlements : Transaction.all {
+            for await verification in onlyIncludeActiveItems ? Transaction.currentEntitlements : Transaction.all {
                 do {
                     // Check whether the transaction is verified. If it isn’t, catch `failedVerification` error.
-                    let transaction = try checkVerified(result)
+                    let transaction = try checkVerified(verification)
                     // Check the `productType` of the transaction and get the corresponding product from the store.
                     if !onlyIncludeActiveItems {
-                        addTransaction(transaction: transaction)
+                        addTransaction(transaction: transaction, verification: verification)
                         continue
                     }
                     switch transaction.productType {
                     case .nonConsumable:
                         if await productStore.getProduct(productID: transaction.productID) != nil {
-                            addTransaction(transaction: transaction)
+                            addTransaction(transaction: transaction, verification: verification)
                         }
 
                     case .nonRenewable:
@@ -637,18 +652,18 @@ class RNIapIosSk2iOS15: Sk2Delegate {
                                                                                        to: transaction.purchaseDate)!
 
                             if currentDate < expirationDate {
-                                addTransaction(transaction: transaction)
+                                addTransaction(transaction: transaction, verification: verification)
                             }
                         }
 
                     case .autoRenewable:
                         if await productStore.getProduct(productID: transaction.productID) != nil {
-                            addTransaction(transaction: transaction)
+                            addTransaction(transaction: transaction, verification: verification)
                         }
 
                     case .consumable:
                         if await productStore.getProduct(productID: transaction.productID) != nil {
-                            addTransaction(transaction: transaction)
+                            addTransaction(transaction: transaction, verification: verification)
                         }
 
                     default:
@@ -678,7 +693,7 @@ class RNIapIosSk2iOS15: Sk2Delegate {
             // group, so products in the subscriptions array all belong to the same group. The statuses that
             // `product.subscription.status` returns apply to the entire subscription group.
             // subscriptionGroupStatus = try? await subscriptions.first?.subscription?.status.first?.state
-            resolve(purchasedItems.map({(t: Transaction) in serialize(t)}))
+            resolve(purchasedItemsSerialized)
         }
     }
 
@@ -715,7 +730,25 @@ class RNIapIosSk2iOS15: Sk2Delegate {
                     }
                     debugMessage("Purchase Started")
 
-                    let result = try await product.purchase(options: options)
+                    guard let windowScene = await currentWindow()?.windowScene else {
+                        reject(IapErrors.E_DEVELOPER_ERROR.rawValue, "Could not find window scene", nil)
+                        return
+                    }
+
+                    var result: Product.PurchaseResult?
+
+                    #if swift(>=5.9)
+                    if #available(iOS 17.0, tvOS 17.0, *) {
+                        result = try await product.purchase(confirmIn: windowScene, options: options)
+                    } else {
+                        #if !os(visionOS)
+                        result = try await product.purchase(options: options)
+                        #endif
+                    }
+                    #elseif !os(visionOS)
+                    result = try await product.purchase(options: options)
+                    #endif
+
                     switch result {
                     case .success(let verification):
                         debugMessage("Purchase Successful")
@@ -921,7 +954,11 @@ class RNIapIosSk2iOS15: Sk2Delegate {
                 try await AppStore.sync()
                 resolve(nil)
             } catch {
-                reject(IapErrors.E_SYNC_ERROR.rawValue, "Error synchronizing with the AppStore", error)
+                if "\(error)" == "userCancelled" {
+                    reject( IapErrors.E_USER_CANCELLED.rawValue, "User cancelled synchronizing with the AppStore", error)
+                } else {
+                    reject( IapErrors.E_SYNC_ERROR.rawValue, "Error synchronizing with the AppStore", error)
+                }
             }
         }
     }
@@ -947,22 +984,20 @@ class RNIapIosSk2iOS15: Sk2Delegate {
         reject: @escaping RCTPromiseRejectBlock = { _, _, _ in }
     ) {
         #if !os(tvOS)
-        DispatchQueue.main.async {
-            guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+        Task {
+            guard let scene = await currentWindow()?.windowScene as? UIWindowScene,
                   !ProcessInfo.processInfo.isiOSAppOnMac else {
                 return
             }
 
-            Task {
-                do {
-                    try await AppStore.showManageSubscriptions(in: scene)
-                } catch {
-                    print("Error:(error)")
-                }
+            do {
+                try await AppStore.showManageSubscriptions(in: scene)
+            } catch {
+                print("Error:(error)")
             }
-
-            resolve(nil)
         }
+
+        resolve(nil)
         #else
         reject(IapErrors.E_USER_CANCELLED.rawValue, "This method is not available on tvOS", nil)
         #endif
@@ -994,12 +1029,15 @@ class RNIapIosSk2iOS15: Sk2Delegate {
             switch rs {
             case .success: return "success"
             case .userCancelled: return "userCancelled"
+
             default:
                 return nil
             }
         }
+
         Task {
-            if let windowScene = await  UIApplication.shared.keyWindow?.windowScene {
+            let window = await currentWindow()
+            if let windowScene = await window?.windowScene {
                 if let product = await productStore.getProduct(productID: sku) {
                     if let result = await product.latestTransaction {
                         do {
@@ -1026,5 +1064,12 @@ class RNIapIosSk2iOS15: Sk2Delegate {
         #else
         reject(IapErrors.E_USER_CANCELLED.rawValue, "This method is not available on tvOS", nil)
         #endif
+    }
+
+    public func getStorefront(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        Task {
+            let storefront = await Storefront.current
+            resolve(storefront?.countryCode)
+        }
     }
 }

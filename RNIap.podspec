@@ -11,8 +11,8 @@ Pod::Spec.new do |s|
   s.license      = package["license"]
   s.authors      = package["author"]
 
-  s.platforms    = { :ios => "10.0" , :tvos => "10.0"}
-  s.source       = { :git => "https://github.com/dooboolab-community/react-native-iap.git", :tag => "#{s.version}" }
+  s.platforms    = { :ios => "10.0" , :tvos => "10.0", :visionos => "1.0" }
+  s.source       = { :git => "https://github.com/hyochan/react-native-iap.git", :tag => "#{s.version}" }
 
   s.source_files = "ios/*.{h,m,mm,swift}"
 
@@ -28,7 +28,6 @@ Pod::Spec.new do |s|
         "CLANG_CXX_LANGUAGE_STANDARD" => "c++17"
     }
 
-    s.dependency "React-Codegen"
     s.dependency "RCT-Folly"
     s.dependency "RCTRequired"
     s.dependency "RCTTypeSafety"

@@ -9,9 +9,9 @@ import {
   InstallSourceAndroid,
   Product,
   ProductType,
-  ProrationModesAndroid,
   Purchase,
   PurchaseResult,
+  ReplacementModesAndroid,
   Sku,
 } from '../types';
 import type * as Android from '../types/android';
@@ -39,7 +39,7 @@ export type BuyItemByType = (
   type: string,
   skus: Sku[],
   purchaseToken: string | undefined,
-  prorationMode: ProrationModesAndroid | -1,
+  replacementModeAndroid: ReplacementModesAndroid | -1,
   obfuscatedAccountId: string | undefined,
   obfuscatedProfileId: string | undefined,
   subscriptionOffers: string[],
@@ -58,6 +58,7 @@ type ConsumeProduct = (
 
 type StartListening = () => Promise<void>;
 type GetPackageName = () => Promise<string>;
+type GetStorefront = () => Promise<string>;
 
 export interface AndroidModuleProps extends NativeModuleProps {
   flushFailedPurchasesCachedAsPending: FlushFailedPurchasesCachedAsPending;
@@ -70,6 +71,7 @@ export interface AndroidModuleProps extends NativeModuleProps {
   /** @deprecated to be renamed to sendUnconsumedPurchases if not removed completely */
   startListening: StartListening;
   getPackageName: GetPackageName;
+  getStorefront: GetStorefront;
   isFeatureSupported: (feature: Android.FeatureType) => Promise<boolean>;
 }
 

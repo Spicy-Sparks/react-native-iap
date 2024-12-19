@@ -22,28 +22,33 @@ class RNIapAmazonModule(
     private val reactContext: ReactApplicationContext,
     private val purchasingService: PurchasingServiceProxy = PurchasingServiceProxyAmazonImpl(),
     private var eventSender: EventSender? = null,
-) :
-    ReactContextBaseJavaModule(reactContext) {
-    override fun getName(): String {
-        return TAG
-    }
+) : ReactContextBaseJavaModule(reactContext) {
+    override fun getName(): String = TAG
 
     @ReactMethod
     fun initConnection(promise: Promise) {
         if (RNIapActivityListener.amazonListener == null) {
-            promise.safeReject(PromiseUtils.E_DEVELOPER_ERROR, Exception("RNIapActivityListener is not registered in your MainActivity.onCreate"))
+            promise.safeReject(
+                PromiseUtils.E_DEVELOPER_ERROR,
+                Exception("RNIapActivityListener is not registered in your MainActivity.onCreate"),
+            )
             return
         }
         if (eventSender == null) {
-            eventSender = object : EventSender {
-                private val rctDeviceEventEmitter = reactContext
-                    .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            eventSender =
+                object : EventSender {
+                    private val rctDeviceEventEmitter =
+                        reactContext
+                            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
 
-                override fun sendEvent(eventName: String, params: WritableMap?) {
-                    rctDeviceEventEmitter
-                        .emit(eventName, params)
+                    override fun sendEvent(
+                        eventName: String,
+                        params: WritableMap?,
+                    ) {
+                        rctDeviceEventEmitter
+                            .emit(eventName, params)
+                    }
                 }
-            }
         }
         RNIapActivityListener.amazonListener?.eventSender = eventSender
         RNIapActivityListener.amazonListener?.purchasingService = purchasingService
@@ -52,37 +57,27 @@ class RNIapAmazonModule(
 
     @ReactMethod
     fun verifyLicense(promise: Promise) {
+        if (!BuildConfig.IS_AMAZON_DRM_ENABLED) {
+            Log.d(TAG, "Amazon's DRM is disabled")
+            promise.resolve("NOT_LICENSED")
+            return
+        }
+
+        Log.d(TAG, "Amazon's DRM is enabled")
         try {
             LicensingService.verifyLicense(reactApplicationContext) { licenseResponse ->
-                when (
-                    val status: LicenseResponse.RequestStatus =
-                        licenseResponse.requestStatus
-                ) {
-                    LicenseResponse.RequestStatus.LICENSED -> {
-                        Log.d(TAG, "LicenseResponse status: $status")
-                        promise.resolve("LICENSED")
-                    }
-                    LicenseResponse.RequestStatus.NOT_LICENSED -> {
-                        Log.d(TAG, "LicenseResponse status: $status")
-                        promise.resolve("NOT_LICENSED")
-                    }
-                    LicenseResponse.RequestStatus.EXPIRED -> {
-                        Log.d(TAG, "LicenseResponse status: $status")
-                        promise.resolve("EXPIRED")
-                    }
-                    LicenseResponse.RequestStatus.ERROR_VERIFICATION -> {
-                        Log.d(TAG, "LicenseResponse status: $status")
-                        promise.resolve("ERROR_VERIFICATION")
-                    }
-                    LicenseResponse.RequestStatus.ERROR_INVALID_LICENSING_KEYS -> {
-                        Log.d(TAG, "LicenseResponse status: $status")
-                        promise.resolve("ERROR_INVALID_LICENSING_KEYS")
-                    }
-                    LicenseResponse.RequestStatus.UNKNOWN_ERROR -> {
-                        Log.d(TAG, "LicenseResponse status: $status")
-                        promise.resolve("UNKNOWN_ERROR")
-                    }
+                val status = licenseResponse.requestStatus.also {
+                    Log.d(TAG, "LicenseResponse status: $it")
                 }
+                when (status) {
+                    LicenseResponse.RequestStatus.LICENSED -> "LICENSED"
+                    LicenseResponse.RequestStatus.NOT_LICENSED -> "NOT_LICENSED"
+                    LicenseResponse.RequestStatus.EXPIRED -> "EXPIRED"
+                    LicenseResponse.RequestStatus.ERROR_VERIFICATION -> "ERROR_VERIFICATION"
+                    LicenseResponse.RequestStatus.ERROR_INVALID_LICENSING_KEYS -> "ERROR_INVALID_LICENSING_KEYS"
+                    LicenseResponse.RequestStatus.UNKNOWN_ERROR -> "UNKNOWN_ERROR"
+                    else -> null
+                }?.let { promise.resolve(it) }
             }
         } catch (exception: Exception) {
             promise.reject("Error while attempting to check for License", exception)
@@ -109,15 +104,17 @@ class RNIapAmazonModule(
     }
 
     @ReactMethod
-    fun getItemsByType(type: String?, skuArr: ReadableArray, promise: Promise) {
+    fun getItemsByType(
+        type: String?,
+        skuArr: ReadableArray,
+        promise: Promise,
+    ) {
         val productSkus: MutableSet<String> = HashSet()
         var ii = 0
         val skuSize = skuArr.size()
         while (ii < skuSize) {
             val sku = skuArr.getString(ii)
-            if (sku is String) {
-                productSkus.add(sku)
-            }
+            productSkus.add(sku)
             ii++
         }
         PromiseUtils.addPromiseForKey(PROMISE_GET_PRODUCT_DATA, promise)
@@ -171,7 +168,10 @@ class RNIapAmazonModule(
      * From https://amazon.developer.forums.answerhub.com/questions/175720/how-to-open-store-subscription-screen-directly-use.html?childToView=179402#answer-179402
      */
     @ReactMethod
-    fun deepLinkToSubscriptions(isAmazonDevice: Boolean, promise: Promise) {
+    fun deepLinkToSubscriptions(
+        isAmazonDevice: Boolean,
+        promise: Promise,
+    ) {
         if (isAmazonDevice) {
             val intent =
                 Intent("android.intent.action.VIEW", Uri.parse("amzn://apps/library/subscriptions"))
@@ -210,22 +210,26 @@ class RNIapAmazonModule(
 
         const val TAG = "RNIapAmazonModule"
     }
+
     init {
-        val lifecycleEventListener: LifecycleEventListener = object : LifecycleEventListener {
-            /**
-             * From https://developer.amazon.com/docs/in-app-purchasing/iap-implement-iap.html#getpurchaseupdates-responses
-             * We should fetch updates on resume
-             */
-            override fun onHostResume() {
-                if (RNIapActivityListener.hasListener) {
-                    purchasingService.getUserData()
-                    purchasingService.getPurchaseUpdates(false)
+        val lifecycleEventListener: LifecycleEventListener =
+            object : LifecycleEventListener {
+                /**
+                 * From https://developer.amazon.com/docs/in-app-purchasing/iap-implement-iap.html#getpurchaseupdates-responses
+                 * We should fetch updates on resume
+                 */
+                override fun onHostResume() {
+                    if (RNIapActivityListener.hasListener) {
+                        purchasingService.getUserData()
+                        purchasingService.getPurchaseUpdates(false)
+                    }
+                }
+
+                override fun onHostPause() {}
+
+                override fun onHostDestroy() {
                 }
             }
-            override fun onHostPause() {}
-            override fun onHostDestroy() {
-            }
-        }
         reactContext.addLifecycleEventListener(lifecycleEventListener)
     }
 }
